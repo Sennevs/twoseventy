@@ -1,7 +1,8 @@
 import json
 import tkinter as tk
 
-from .env import Env
+from env.env import Env
+from agent import Agent
 
 
 class Simulator:
@@ -10,8 +11,25 @@ class Simulator:
 
         self.env = Env(players)
         self.turn = 0
+        self.agents = {player['name']: Agent(player['name']) for player in players if player['type'] == 'ai'}
 
-    def play(self, ui=None):
+    def _select_ui(self, ui):
+
+        if ui is None:
+            ans = self._get_action_no_ui
+        elif ui == 'text':
+            ans = self._get_action_text_ui
+        elif ui == 'fields':
+            ans = self._get_action_fields_ui
+        else:
+            raise ValueError(f'{ui.capitalize()} is currently not implemented. '
+                             f'Please choose either None, text or fields as your ui.')
+
+        return ans
+
+    def play(self, train=False, ui=None):
+
+        ui_function = self._select_ui(ui)
 
         done = False
         while not done:
@@ -20,17 +38,19 @@ class Simulator:
             # update this to better state representation
             print(self.env.board.states)
 
-            if ui is None:
-                actions = self._get_action_no_ui()
-            elif ui == 'text':
-                actions = self._get_action_text_ui()
-            elif ui == 'fields':
-                actions = self._get_action_fields_ui()
-            else:
-                raise ValueError(f'{ui.capitalize()} is currently not implemented. '
-                                 f'Please choose either None, text or fields as your ui.')
+            for player in self.env.players:
+                if player.type == 'ai':
+                    if train:
+                        self.agents[player['name']].train()
+                    else:
+                        self.agents[player['name']].predict()
+                    # execute
+                else:
+                    actions = ui_function()
 
-            done = self.env.step(actions)
+
+            state, budgets, reward, done, info = self.env.step(actions)
+            print(done)
             self.turn += 1
 
         print('The game has been finished.')
@@ -94,6 +114,3 @@ class Simulator:
         root.mainloop()
 
         return actions
-
-
-

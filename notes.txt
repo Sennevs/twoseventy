@@ -1,0 +1,35 @@
+Currently assume a 2-player game in the general election mode
+
+Action space:
+Approach 1 (58):
+    - States (51)
+    - National groups (6)
+    - End turn (1)
+Approach 2 (628):
+    - Value per state (51*11=561)
+    - Value per national group (6*11=66)
+    - End turn (1)
+
+Reward:
+- 1 or zero at the end of the game if win or lose
+- Number of electoral votes
+
+State space (we can also use same principle as for action space here):
+- Current board setup:
+    * For each player:
+        + Number of investments per state (51)
+        + Number of investments per national group (6)
+        + Budget at start of round (1)
+        + If state is open for this candidate (1)
+        + If national group is open for this candidate (1)
+
+- Moves made in this round:
+    * Number of investments per state (51)
+    * Number of investments per national group (6)
+    * Budget at start of move (1) -- might not be necessary
+
+Future improvements:
+- Extend two player to multi-player
+- Add primaries mode
+- Implement fields ui
+- Implement gui
