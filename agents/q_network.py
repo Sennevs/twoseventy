@@ -2,7 +2,7 @@ from tensorflow.keras.layers import Dense, BatchNormalization, Concatenate, Embe
 from tensorflow.keras import Model
 
 
-class QFunction(Model):
+class QNetwork(Model):
 
     def __init__(self):
 

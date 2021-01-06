@@ -1,2 +1,2 @@
 from .env import Simulator
-from .agent import Agent
+from .agents import Agent
