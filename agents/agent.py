@@ -8,7 +8,6 @@ from tensorflow.keras.optimizers import Adam, SGD
 from .q_network import QNetwork
 from .policies import EGreedy, Greedy
 from .replay_buffer import ReplayBuffer
-from ..env import Env
 
 BATCH_SIZE = 1
 
@@ -97,6 +96,7 @@ class AI(Agent):
         return self.player
 
     def update(self):
+
 
         # should find a way to make the update rule variable
         state, action, reward, next_state, action_space = self.replay_buffer.sample(size=BATCH_SIZE)

@@ -20,7 +20,7 @@ class EGreedy(Policy):
 
         self.epsilon = epsilon
 
-    def sample(self, q_function, state, action_space):
+    def sample(self, actions):
         """
 
         :param q_function:
@@ -30,16 +30,15 @@ class EGreedy(Policy):
         """
 
         greedy = random.random() > self.epsilon
-        as_size = action_space.shape[0]
 
-        state = state.repeat(state, as_size, axis=0)
+        if greedy:
+            idx = np.argmax(actions)
+        else:
+            idx = random.randrange(actions.shape[0])
+            print(idx)
 
-        preds = q_function([state, action_space])
-
-        idx = np.argmax(preds) if greedy else np.random.choice(as_size, 1)
-
-        action = np.zeros((as_size, 1))
-        action[idx] = 1
+        action = np.zeros((1, actions.shape[0]))
+        action[:, idx] = 1
 
         return action
 
@@ -49,7 +48,7 @@ class Greedy(Policy):
     def __init__(self):
         super().__init__()
 
-    def sample(self, q_function, state, action_space):
+    def sample(self, actions):
         """
 
         :param q_function:
@@ -58,15 +57,9 @@ class Greedy(Policy):
         :return:
         """
 
-        as_size = action_space.shape[0]
+        idx = np.argmax(actions)
 
-        state = state.repeat(state, as_size, axis=0)
-
-        preds = q_function([state, action_space])
-
-        idx = np.argmax(preds)
-
-        action = np.zeros((as_size, 1))
-        action[idx] = 1
+        action = np.zeros((1, actions.shape[0]))
+        action[:, idx] = 1
 
         return action

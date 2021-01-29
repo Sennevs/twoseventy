@@ -1,7 +1,7 @@
 import json
 import tkinter as tk
 
-from env.env import Env
+from games.twoseventy import Env
 from agents import AI, Human
 
 

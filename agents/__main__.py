@@ -1,5 +1,7 @@
 from .agent import Agent
-from ..env import Env
+from games.twoseventy import Env
+
+from games.tictactoe import TicTacToeEnv
 
 NUMBER_OF_AGENTS = 2
 
@@ -8,26 +10,25 @@ max_turn_steps = 20
 episodes = 100
 
 # create agents
-agents = [Agent(str(id)) for id in range(0, NUMBER_OF_AGENTS)]
+agents = {f'agent_{agent_id}': Agent(str(id)) for agent_id in range(0, NUMBER_OF_AGENTS)}
 
 # here we need to automate choosing the optimal candidate, for now, this is hardcoded in Agent
-agent_players = [agent.choose_player() for agent in agents]
+# move this part to twoseventy
+# agent_players = [agent.choose_player() for agent in agents]
+# env = Env(agent_players)
 
-env = Env(agent_players)
-
+env = TicTacToeEnv(agents.keys())
 for episode in range(0, 100):
 
-    states = env.reset()
+    state, current_player = env.reset()
     
     done = False
     step = 0
     while not done:
 
-        actions = []
-        for agent, state in (agents, states):
-            actions.append(agent.play(max_turn_steps))
+        action = agents[current_player].action()
 
-        env.step(actions)
+        state, reward, done, next_player, info = env.step(action)
 
         step += 1
         if step >= max_episode_steps:

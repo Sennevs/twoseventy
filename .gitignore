@@ -107,9 +107,9 @@ celerybeat.pid
 # Environments
 .env
 .venv
-env/
+games/twoseventy/
 venv/
-ENV/
+games/twoseventy/
 env.bak/
 venv.bak/
 
