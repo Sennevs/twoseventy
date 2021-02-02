@@ -11,7 +11,7 @@ class Simulator:
 
         self.env = Env(players)
         self.turn = 0
-        self.agents = {player['name']: AI(player['name']) if player['type'] == 'ai' else Human(player['name'])
+        self.agents = {player.name: AI(player.name) if player.type == 'ai' else Human(player.name)
                        for player in self.env.players}
 
     def play(self, train=False, ui=None):

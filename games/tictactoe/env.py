@@ -1,14 +1,14 @@
 import numpy as np
-
+from random import shuffle
+from collections import deque
 from games import Env
 
 
 class Player:
 
-    def __init__(self, name, player_id):
+    def __init__(self, player_id):
 
         self.observed_state = None
-        self.name = name
         self.id = player_id
 
         return
@@ -16,43 +16,136 @@ class Player:
 
 class TicTacToeEnv(Env):
 
-    def __init__(self, players):
+    def __init__(self, players, board_size=3, start_order='random'):
 
+        # temp checks because not everything is supported yet
         if len(players) != 2:
             raise ValueError('Currently only 2 players is supported.')
 
-        self.players = [Player(player, player_id=i) for i, player in enumerate(players)]
-        self.board_size = 3
-        self.board = np.zeros((self.board_size, self.board_size))
-        for player in self.players:
-            player.observed_state = self.board
-        self.active_player = 0
-        self.inactive_player = 1
-        self.info = {}
+        if board_size != 3:
+            raise ValueError('Currently only 2 players is supported.')
 
-        self.name_to_idx = {player.name: idx for idx, player in enumerate(self.players)}
+        if len(set(players)) != len(players):
+            raise ValueError('Player names should be unique.')
+
+        self.players = {player: Player(player) for player in players}
+        self.board_size = board_size
+        self.start_order = start_order
+
+        self.board = None
+        self._turn_sequence = None
+        self._turn_starts = None
+        self.active_player = None
+        self.info = {}
 
         self.done = False
         self.winner = None
+        self.rewards = {player: None for player in self.players}
+        return
 
+    def visualize_board(self):
+
+        ans = self.board * list(range(1, len(self.players) + 1))
+        ans = ans.sum(axis=1).reshape((3, 3))
+
+        return ans
+
+    def update_active_player(self):
+
+        self.active_player = self._turn_sequence.popleft()
+        self._turn_sequence.append(self.active_player)
+
+        return
+
+    def reset_board(self):
+
+        self.board = np.zeros((self.board_size * self.board_size, len(self.players)))
+
+        return
+
+    def reset(self):
+
+        self.initialize_turn_sequence()
+        self.update_active_player()
+        self.reset_board()
+        self.info = {}
+        self.rewards = {player: None for player in self.players}
+
+        self.winner = None
+
+        self.done = False
+
+        return self.active_player
+
+    def initialize_turn_sequence(self):
+
+        if self.start_order == 'random':
+            self._turn_sequence = deque(self.players.keys())
+            shuffle(self._turn_sequence)
+        else:
+            self._turn_sequence = deque(self.start_order)
+
+        self._turn_starts = self._turn_sequence.copy()
+
+        return
+
+    def step(self, player, action):
+
+        # check if this player is allowed to make a move right now
+        self.verify_player(player)
+
+        # check if move is legal
+        self.verify_action(action)
+
+        # update game state
+        self.confirm_move(action)
+
+        # check if there's a winner
+        self.check_win()
+
+        # update active player
+        self.update_active_player()
+
+        self.rewards = self._update_rewards()
+
+        return self.done, self.active_player, self.info
+
+    def verify_player(self, player):
+
+        if player != self.active_player:
+            raise ValueError('This action is illegal because a different player is currently required to make a move.')
+
+        return
+
+    def verify_action(self, action):
+
+        # check if only one action is executed
+        if (sum(action == 0) != (self.board_size ** 2 - 1)) or (sum(action == 1) != 1):
+            raise ValueError('Action is illegal: more than 1 action is performed.')
+
+        if self.board[action == 1].sum() != 0:
+            raise ValueError('Action is illegal: tile is already occupied.')
 
         return
 
     def get_legal_actions(self):
 
-        return np.absolute(self.board).reshape([9, 1])
+        if self.done:
+            ans = None
+        else:
+            ans = self.board.sum(axis=1)
+
+        return ans
 
     def observe(self, player):
 
-        player = self.name_to_idx[player]
-
         legal_actions = self.get_legal_actions()
 
-        return self.players[player].observed_state.reshape([1, 9]), legal_actions
+        return self.board.reshape(-1), self.rewards[player], legal_actions
 
     def check_win(self):
 
-        eval_board = self.players[self.active_player].observed_state == 1
+        eval_board = self.board[:, self._turn_starts.index(self.active_player)].reshape([self.board_size, self.board_size])
 
         rows = eval_board.sum(axis=0)
         cols = eval_board.sum(axis=1)
@@ -62,280 +155,32 @@ class TicTacToeEnv(Env):
         res = np.concatenate([rows, cols, diag, adiag], axis=0)
 
         if 3 in res:
-            self.winner = self.players[self.active_player].name
+            self.winner = self.active_player
             self.done = True
 
-        if not np.any(self.board == 0):
+        if not np.any(self.board.sum(axis=1) == 0):
             self.done = True
-            self.winner = 'tie'
+            self.winner = None
 
         return self.winner
 
-    def update_player_turn(self):
-
-        if self.active_player == 0:
-            self.active_player = 1
-            self.inactive_player = 0
-        else:
-            self.active_player = 0
-            self.inactive_player = 1
-
-        return
-
     def confirm_move(self, action):
 
-        new_board = self.board + action
-
-        changes = 0
-        legal = True
-        for old_field, new_field in zip(self.board.flatten(), new_board.flatten()):
-            if old_field != new_field:
-                changes += 1
-                if old_field != 0 or (new_field not in (1, -1)):
-                    legal = False
-
-        if (not legal) or (changes != 1):
-            print('State:')
-            print(state)
-            print('Action:')
-            print(action)
-            raise ValueError('Move was illegal and has not been confirmed.')
-
-        self.board = new_board
-
-        self.players[0].observed_state = self.board
-        self.players[1].observed_state = -self.board
+        self.board[:, self._turn_starts.index(self.active_player)] += action
 
         return
-
-    def _standardize_action(self, action):
-
-        if self.active_player == 1:
-            action *= -1
-        action = action.reshape([3, 3])
-
-        return action
 
     def _update_rewards(self):
 
-        if self.winner == 'tie':
-            rewards = {player.name: 0 for player in self.players}
+        if self.done and self.winner is not None:
+            rewards = {player: 1 if (player == self.winner) else -1 for player in self.players}
         else:
-            rewards = {player.name: int(player.name == self.winner) for player in self.players}
-            if self.done:
-                rewards = {key: -1 if (value == 0) else 1 for key, value in rewards.items()}
+            rewards = {player: 0 for player in self.players}
 
         return rewards
-
-
-    def step(self, action):
-
-        # standardize action
-        action = self._standardize_action(action)
-
-        # update game state
-        self.confirm_move(action)
-
-        # check if there's a winner
-        self.check_win()
-
-        # update active player
-        self.update_player_turn()
-
-        rewards = self._update_rewards()
-
-        return rewards, self.done, self.players[self.active_player].name, self.info
-
-    def reset(self):
-
-        self.board_size = 3
-        self.board = np.zeros((self.board_size, self.board_size))
-        for player in self.players:
-            player.observed_state = self.board
-        self.active_player = 0
-        self.info = {}
-
-        self.done = False
-
-        return self.players[self.active_player].observed_state, self.players[self.active_player].name
 
     def close(self):
 
         return
-
-from games.tictactoe.agent import AI
-
-player_1 = AI(1)
-player_2 = AI(2)
-env = TicTacToeEnv(['player_1', 'player_2'])
-
-
-def play_game(episodes=100, greedy=False, target=False, plot=False):
-    num_episodes = episodes
-
-    player_1_rewards = []
-    player_2_rewards = []
-    for episode in range(num_episodes):
-
-        print(f'Episode: {episode}')
-
-        player_1.reset()
-        player_2.reset()
-        state, active_player = env.reset()
-        done_z = False
-        rewards_z = None
-        first_1 = True
-        first_2 = True
-
-
-        step = 0
-        while not done_z:
-
-            if active_player == 'player_1':
-                state_1, legal_actions_1 = env.observe('player_1')
-                action_1 = player_1.play(state_1, legal_actions_1, greedy=greedy, target=target)
-
-                #print(f'Action: {action_1}')
-                rewards_z, done_z, active_player, info = env.step(action_1)
-
-            else:
-                state_2, legal_actions_2 = env.observe('player_2')
-                action_2 = player_2.play(state_2, legal_actions_2, greedy=greedy, target=target)
-
-                #print(f'Action: {action_2}')
-                rewards_z, done_z, active_player, info = env.step(action_2)
-            #print(f'Done: {done_z}')
-
-            player_1.update()
-            player_2.update()
-
-            #print(active_player)
-
-            if not first_1:
-                if active_player == 'player_1':
-                    player_1.observe(state_1, action_1, rewards_z['player_1'], legal_actions_1)
-            if not first_2:
-                if active_player == 'player_2':
-                    player_2.observe(state_2, action_2, rewards_z['player_2'], legal_actions_2)
-
-            if done_z:
-                #player_1.observe(state_1, action_1, rewards_z['player_1'], legal_actions_1)
-                #player_2.observe(state_2, action_2, rewards_z['player_2'], legal_actions_2)
-
-                state_1, legal_actions_1 = env.observe('player_1')
-                player_1.observe(state_1, action_1, 0, None)
-                state_2, legal_actions_2 = env.observe('player_2')
-                player_2.observe(state_2, action_2, 0, None)
-
-
-            #print(f'Reward: {rewards_z}')
-
-            step += 1
-
-            if active_player == 'player_1':
-                first_2 = False
-            else:
-                first_1 = False
-
-        player_1_rewards.append(rewards_z['player_1'])
-        player_2_rewards.append(rewards_z['player_2'])
-
-        print(f'Reward: {rewards_z}')
-        print('Final board:')
-        print(env.board)
-
-
-
-
-    print('Player 1 rewards')
-    print(sum(player_1_rewards))
-    print('Player 2 rewards')
-    print(sum(player_2_rewards))
-
-    print(player_1_rewards)
-    print(player_2_rewards)
-
-
-    roll_1 = [sum(player_1_rewards[max(0, a-100):a + 1])/(a + 1 - max(0, a-100)) for a, b in enumerate(player_1_rewards)]
-    roll_2 = [sum(player_2_rewards[max(0, a-100):a + 1])/(a + 1 - max(0, a-100)) for a, b in enumerate(player_2_rewards)]
-
-    print(roll_1)
-    print(roll_2)
-
-    import matplotlib.pyplot as plt
-
-    #print(player_1.loss_hist)
-    #print(player_2.loss_hist)
-
-    if plot:
-        loss_roll_1 = [sum(player_1.loss_hist[max(0, a-100):a + 1])/(a + 1 - max(0, a-100)) for a, b in enumerate(player_1.loss_hist)]
-        loss_roll_2 = [sum(player_2.loss_hist[max(0, a-100):a + 1])/(a + 1 - max(0, a-100)) for a, b in enumerate(player_2.loss_hist)]
-        plt.plot(list(range(len(loss_roll_1))), loss_roll_1)
-        plt.plot(list(range(len(loss_roll_2))), loss_roll_2)
-        plt.show()
-        loss_roll_1 = loss_roll_1[50:]
-        loss_roll_2 = loss_roll_2[50:]
-        plt.plot(list(range(len(loss_roll_1))), loss_roll_1)
-        plt.plot(list(range(len(loss_roll_2))), loss_roll_2)
-        plt.show()
-
-        #plt.scatter(np.asarray(list(range(len(player_1.loss_hist)))), np.asarray(player_1.loss_hist))
-        #plt.scatter(np.asarray(list(range(len(player_2.loss_hist)))), np.asarray(player_2.loss_hist))
-        #plt.show()
-
-        plt.plot(list(range(len(roll_1))), roll_1)
-        plt.plot(list(range(len(roll_2))), roll_2)
-        plt.show()
-
-
-play_game(episodes=10000, target=False, plot=True)
-player_1.save_model()
-player_2.save_model()
-
-print('a')
-print(list(player_1.replay_buffer.states)[0:10])
-print(list(player_1.replay_buffer.rewards)[0:10])
-print(list(player_1.replay_buffer.actions)[0:10])
-print(list(player_1.replay_buffer.next_states)[0:10])
-print(list(player_1.replay_buffer.action_spaces)[0:10])
-print(list(player_1.replay_buffer.next_action_spaces)[0:10])
-print('b')
-print(list(player_2.replay_buffer.states)[0:10])
-print(list(player_2.replay_buffer.rewards)[0:10])
-print(list(player_2.replay_buffer.actions)[0:10])
-print(list(player_2.replay_buffer.next_states)[0:10])
-print(list(player_2.replay_buffer.action_spaces)[0:10])
-print(list(player_2.replay_buffer.next_action_spaces)[0:10])
-
-play_game(episodes=1, greedy=True, target=True)
-exit()
-
-from games.tictactoe.agent import AI
-
-state_space = [9, 1]
-action_space = [9, 1]
-
-player_1 = AI(1)
-player_2 = AI(2)
-env = TicTacToeEnv(['player_1', 'player_2'])
-state, active_player = env.reset()
-done = False
-reward_z = None
-while not done:
-
-
-    x = input(f'Player {active_player} make your move: ')
-    action_z = np.zeros((9,1))
-    action_z[int(x)] = 1
-
-    print(f'Action: {action_z}')
-    rewards_z, done, active_player, info = env.step(action_z)
-
-
-
-    print(env.observe(active_player))
-
-print(rewards_z)
-
 
 

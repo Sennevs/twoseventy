@@ -1,6 +1,6 @@
 import numpy as np
-
-from tensorflow import GradientTape
+import tensorflow as tf
+from tensorflow import GradientTape, function
 from tensorflow.keras.losses import mean_squared_error
 from tensorflow.keras.optimizers import Adam, SGD
 
@@ -8,7 +8,12 @@ from agents.q_network import QNetwork
 from agents.policies import EGreedy, Greedy
 from agents.replay_buffer import ReplayBuffer
 
-BATCH_SIZE = 1
+import os
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
+
+
+BATCH_SIZE = 100
 
 class AI:
 
@@ -20,10 +25,10 @@ class AI:
         self.q = QNetwork()
         self.q_target = QNetwork()
         self.discount_factor = 0.99
-        self.policy = EGreedy(epsilon=0.1)
+        self.policy = EGreedy(epsilon=0.01)
         self.policy_greedy = Greedy()
         self.q_optimizer = Adam(0.001)
-        self.q_target_optimizer = SGD(0.001)
+        self.q_target_optimizer = SGD(0.01)
 
         self.action_space = [9, 1]
         self.state_space = [9, 1]
@@ -35,22 +40,29 @@ class AI:
         self.replay_buffer = ReplayBuffer()
         self.use_rb = False
 
+        self.turn = None
+
+        # metrics
         self.loss_hist = []
+        self.reward_hist = []
+        self.turn_hist = []
 
+        self._turn_rewards = []
 
-        self.memory = {'state': None, 'action': None, 'reward': None, 'action_space': None}
+        self.memory = {'state': None, 'action': None, 'action_space': None}
 
     def play(self, state, legal_actions, greedy=False, target=False):
 
-        state = state.reshape([1, 9])
 
-        legal_idx = (legal_actions == 0)[:, 0]
+        self.turn += 1
+
+        legal_idx = (legal_actions == 0)
 
         actions = np.zeros([9, 9])
         np.fill_diagonal(actions, 1)
         legal_actions = actions[legal_idx]
 
-        state = state.repeat(legal_actions.shape[0], axis=0)
+        state = state.reshape([1, state.shape[0]]).repeat(legal_actions.shape[0], axis=0)
 
         # loop over legal actions and select action with highest q-value\
         if target:
@@ -63,28 +75,36 @@ class AI:
         else:
             optimal_idx = self.policy.sample(optimal_actions)
 
-        optimal_action = np.zeros((1, 9))
+        optimal_action = np.zeros(9)
 
-        optimal_action[:, legal_idx] = optimal_idx
+        optimal_action[legal_idx] = optimal_idx.reshape(-1)
+
+        self.memory['action'] = optimal_action
 
         # self.previous_actions.append(optimal_actions)
         return optimal_action
 
-    def observe(self, state, action, reward, action_space):
+    def observe(self, state, reward, action_space):
+
+        done = action_space is None
 
         if self.memory['state'] is not None:
-            self.replay_buffer.add(**self.memory, next_state=state, next_action_space=action_space)
+            self.replay_buffer.add(**self.memory, reward=reward, next_state=state, next_action_space=self.memory['action_space'], done=done)
+            self._turn_rewards.append(reward)
 
         self.memory['state'] = state
-        self.memory['action'] = action
-        self.memory['reward'] = reward
         self.memory['action_space'] = action_space
 
         return
 
     def reset(self):
 
-        self.memory = {'state': None, 'action': None, 'reward': None, 'action_space': None}
+        if self.turn is not None:
+            self.turn_hist.append(self.turn)
+            self.reward_hist.append(sum(self._turn_rewards))
+            self._turn_rewards = []
+        self.turn = 0
+        self.memory = {'state': None, 'action': None, 'action_space': None}
 
         return
 
@@ -92,40 +112,63 @@ class AI:
 
         if self.replay_buffer.current_size != 0:
             # should find a way to make the update rule variable
-            state, action, reward, next_state, action_space, next_action_space = self.replay_buffer.sample(size=BATCH_SIZE)
+            states, actions, rewards, next_states, action_spaces, next_action_spaces, dones = self.replay_buffer.sample(size=BATCH_SIZE)
+            optimal_actions_list = []
+            print(next_action_spaces)
 
-            if next_action_space is not None:
-                legal_idx = (next_action_space == 0)[:, 0]
+            target_q_values = []
 
-                next_actions_full = np.zeros([9, 9])
-                np.fill_diagonal(next_actions_full, 1)
-                next_legal_actions = next_actions_full[legal_idx]
-                optimal_states = next_state.repeat(next_legal_actions.shape[0], axis=0)
+            for idx in range(BATCH_SIZE):
 
-                optimal_actions = self.q_target([optimal_states, next_legal_actions])
+                reward = rewards[idx].reshape((1, -1))
+                done = dones[idx]
+                if done:
+                    target_q_value = reward
+                else:
 
-                next_action = self.policy_greedy.sample(optimal_actions)
+                    next_action_space = next_action_spaces[idx].reshape((1, -1))
+                    legal_idx = (next_action_space == 0).reshape(-1)
 
-                optimal_action = np.zeros((1, 9))
+                    next_state = next_states[idx].reshape((1, -1))
 
-                optimal_action[:, legal_idx] = next_action
+                    next_actions_full = np.zeros([9, 9])
+                    np.fill_diagonal(next_actions_full, 1)
+                    next_legal_actions = next_actions_full[legal_idx]
+                    optimal_states = next_state.reshape([1, next_state.shape[1]]).repeat(next_legal_actions.shape[0], axis=0)
 
-                target_q_value = reward + self.discount_factor * self.q([next_state, optimal_action])
-            else:
-                target_q_value = reward
+                    optimal_actions = self.q_target([optimal_states, next_legal_actions])
+
+                    next_action = self.policy_greedy.sample(optimal_actions)
+
+                    optimal_action = np.zeros((1, 9))
+
+                    optimal_action[:, legal_idx] = next_action
+
+                    optimal_actions_list.append(optimal_action)
+
+                    next_state = next_state.reshape([1, -1])
+
+                    target_q_value = reward + self.discount_factor * self.q([next_state, optimal_action])
+                target_q_values.append(target_q_value)
+
+            target_q_values = np.stack(target_q_values)
             # compute td error
-            with GradientTape() as tape:
-                q_value = self.q([state, action])
-                q_loss = mean_squared_error(target_q_value, q_value)
+            target_q_values = tf.convert_to_tensor(target_q_values, dtype=tf.float32)
 
-            self.loss_hist.append(q_loss)
+            @function(experimental_relax_shapes=True)
+            def test_update():
 
-            grads = tape.gradient(q_loss, self.q.trainable_variables)
-            self.q_optimizer.apply_gradients(zip(grads, self.q.trainable_variables))
+                with GradientTape() as tape:
+                    q_values = self.q([states, actions])
+                    q_loss = mean_squared_error(target_q_values, q_values)
+                grads = tape.gradient(q_loss, self.q.trainable_variables)
 
-            # apply soft update
-            grads = [(b - a) for a, b in zip(self.q.trainable_variables, self.q_target.trainable_variables)]
-            self.q_target_optimizer.apply_gradients(zip(grads, self.q_target.trainable_variables))
+                self.q_optimizer.apply_gradients(zip(grads, self.q.trainable_variables))
+                # apply soft update
+                grads = [(b - a) for a, b in zip(self.q.trainable_variables, self.q_target.trainable_variables)]
+                self.q_target_optimizer.apply_gradients(zip(grads, self.q_target.trainable_variables))
+
+                return
 
         else:
             print('Didn\'t update because no samples available.')
