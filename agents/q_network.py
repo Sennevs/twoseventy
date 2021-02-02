@@ -9,11 +9,11 @@ class QNetwork(Model):
         super().__init__()
 
         self.layer_1 = Concatenate()
-        self.layer_2 = Dense(32, activation='relu')
+        self.layer_2 = Dense(64, activation='relu')
         self.layer_3 = BatchNormalization()
-        self.layer_4 = Dense(16, activation='relu')
+        self.layer_4 = Dense(32, activation='relu')
         self.layer_5 = BatchNormalization()
-        self.layer_6 = Dense(1, activation='tanh')
+        self.layer_6 = Dense(1, activation='linear')
 
         return
 

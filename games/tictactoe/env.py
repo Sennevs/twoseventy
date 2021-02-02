@@ -91,22 +91,38 @@ class TicTacToeEnv(Env):
 
     def step(self, player, action):
 
+        import time
+
         # check if this player is allowed to make a move right now
+        #start_time = time.time()
         self.verify_player(player)
+
+        #print(f'Verifying player took {time.time() - start_time} seconds')
+        #start_time = time.time()
 
         # check if move is legal
         self.verify_action(action)
+        #print(f'Verifying action took {time.time() - start_time} seconds')
+        #start_time = time.time()
 
         # update game state
         self.confirm_move(action)
+        #print(f'Confirming move took {time.time() - start_time} seconds')
+        #start_time = time.time()
 
         # check if there's a winner
         self.check_win()
+        #print(f'Checking win took {time.time() - start_time} seconds')
+        #start_time = time.time()
 
         # update active player
         self.update_active_player()
+        #print(f'Updating active player took {time.time() - start_time} seconds')
+        #start_time = time.time()
 
         self.rewards = self._update_rewards()
+        #print(f'Updating rewards took {time.time() - start_time} seconds')
+        #start_time = time.time()
 
         return self.done, self.active_player, self.info
 

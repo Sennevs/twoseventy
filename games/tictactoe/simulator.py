@@ -3,6 +3,12 @@ import matplotlib.pyplot as plt
 from games.tictactoe.agent import AI
 from games.tictactoe.env import TicTacToeEnv
 
+import tensorflow as tf
+physical_devices = tf.config.list_physical_devices('GPU')
+
+tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
+
 
 class Simulator:
 
@@ -20,6 +26,7 @@ class Simulator:
 
         games_per_episode = []
 
+
         for episode in range(episodes):
             print(f'Episode: {episode}')
 
@@ -28,6 +35,9 @@ class Simulator:
 
             done = False
 
+            import time
+            start_time = time.time()
+
             steps = 0
             while not done:
                 active_player = self.players[self.active_player]
@@ -35,18 +45,24 @@ class Simulator:
                 state, previous_rewards, legal_actions = self.env.observe(active_player.id)
                 active_player.observe(state, previous_rewards, legal_actions)
                 action = active_player.play(state, legal_actions, greedy)
+
                 done, self.active_player, info = self.env.step(self.active_player, action)
-                active_player.update()
 
                 steps += 1
                 if max_steps is not None and steps >= max_steps:
-                    games_per_episode.append(steps)
                     break
 
+            print(f'Playing player took {time.time() - start_time} seconds')
+            start_time = time.time()
+
+
             # observe final reward
+            games_per_episode.append(steps)
             [player.observe(*self.env.observe(player.id)) for player in self.players.values()]
+            [player.update() for player in self.players.values()]
 
-
+            print(f'Updating player took {time.time() - start_time} seconds')
+            start_time = time.time()
 
         [print(player.reward_hist) for player in self.players.values()]
         return
@@ -109,13 +125,16 @@ class Simulator:
         plt.plot(list(range(len(roll_2))), roll_2)
         plt.show()
 
+import time
+
+start_time = time.time()
 player_1 = AI('player_1')
 player_2 = AI('player_2')
 simulator = Simulator([player_1, player_2], TicTacToeEnv)
-simulator.play(episodes=1000, greedy=False)
+simulator.play(episodes=10000, greedy=False)
 simulator.plot_performance()
-print(player_1.replay_buffer.data)
-print(player_2.replay_buffer.data)
+
+print(f'Runtime was {time.time() - start_time} seconds.')
 
 simulator.play(episodes=1, greedy=True)
 print(simulator.env.visualize_board())

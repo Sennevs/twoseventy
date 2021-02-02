@@ -25,13 +25,10 @@ class AI:
         self.q = QNetwork()
         self.q_target = QNetwork()
         self.discount_factor = 0.99
-        self.policy = EGreedy(epsilon=0.01)
+        self.policy = EGreedy(epsilon=0.1)
         self.policy_greedy = Greedy()
         self.q_optimizer = Adam(0.001)
-        self.q_target_optimizer = SGD(0.01)
-
-        self.action_space = [9, 1]
-        self.state_space = [9, 1]
+        self.q_target_optimizer = SGD(0.0001)
 
         # not sure if this should be list or numpy/tensor
         # this is what we need to keep track of the environment to let our agent reflect and learn from its interactions
@@ -108,13 +105,13 @@ class AI:
 
         return
 
+    @function
     def update(self):
 
         if self.replay_buffer.current_size != 0:
             # should find a way to make the update rule variable
             states, actions, rewards, next_states, action_spaces, next_action_spaces, dones = self.replay_buffer.sample(size=BATCH_SIZE)
             optimal_actions_list = []
-            print(next_action_spaces)
 
             target_q_values = []
 
@@ -131,44 +128,37 @@ class AI:
 
                     next_state = next_states[idx].reshape((1, -1))
 
-                    next_actions_full = np.zeros([9, 9])
-                    np.fill_diagonal(next_actions_full, 1)
+                    next_actions_full = tf.zeros([9, 9])
+                    tf.linalg.set_diag(next_actions_full, tf.fill([9], tf.constant(1, tf.float32)))
                     next_legal_actions = next_actions_full[legal_idx]
-                    optimal_states = next_state.reshape([1, next_state.shape[1]]).repeat(next_legal_actions.shape[0], axis=0)
 
-                    optimal_actions = self.q_target([optimal_states, next_legal_actions])
+                    optimal_states = tf.repeat(next_state.reshape((1, -1)), tf.shape(next_legal_actions)[0], axis=0)
 
-                    next_action = self.policy_greedy.sample(optimal_actions)
+                    optimal_action = self.q_target([optimal_states, next_legal_actions])
 
-                    optimal_action = np.zeros((1, 9))
-
-                    optimal_action[:, legal_idx] = next_action
+                    next_action = self.policy_greedy.sample(optimal_action)
 
                     optimal_actions_list.append(optimal_action)
 
                     next_state = next_state.reshape([1, -1])
 
-                    target_q_value = reward + self.discount_factor * self.q([next_state, optimal_action])
+                    target_q_value = reward + self.discount_factor * self.q([next_state, next_action])
                 target_q_values.append(target_q_value)
 
-            target_q_values = np.stack(target_q_values)
+            target_q_values = tf.stack(target_q_values)
             # compute td error
-            target_q_values = tf.convert_to_tensor(target_q_values, dtype=tf.float32)
 
-            @function(experimental_relax_shapes=True)
-            def test_update():
+            with GradientTape() as tape:
+                q_values = self.q([states, actions])
+                q_loss = mean_squared_error(target_q_values, q_values)
 
-                with GradientTape() as tape:
-                    q_values = self.q([states, actions])
-                    q_loss = mean_squared_error(target_q_values, q_values)
-                grads = tape.gradient(q_loss, self.q.trainable_variables)
+            grads = tape.gradient(q_loss, self.q.trainable_variables)
 
-                self.q_optimizer.apply_gradients(zip(grads, self.q.trainable_variables))
-                # apply soft update
-                grads = [(b - a) for a, b in zip(self.q.trainable_variables, self.q_target.trainable_variables)]
-                self.q_target_optimizer.apply_gradients(zip(grads, self.q_target.trainable_variables))
+            self.q_optimizer.apply_gradients(zip(grads, self.q.trainable_variables))
 
-                return
+            # apply soft update
+            grads = [(b - a) for a, b in zip(self.q.trainable_variables, self.q_target.trainable_variables)]
+            self.q_target_optimizer.apply_gradients(zip(grads, self.q_target.trainable_variables))
 
         else:
             print('Didn\'t update because no samples available.')

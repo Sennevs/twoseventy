@@ -17,14 +17,12 @@ class ReplayBuffer:
 
     def sample(self, size):
 
+        print(self.current_size)
+
         samples = [random.randrange(self.current_size) for _ in range(size)]
         return_data = [self.data[i] for i in samples]
         return_data = list(map(list, zip(*return_data)))
-        print(return_data)
         return_data = [np.stack(i) for i in return_data]
-
-        print(return_data)
-
         return tuple(return_data)
 
     def add(self, state, action, reward, next_state, action_space, next_action_space, done):

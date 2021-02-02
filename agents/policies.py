@@ -1,5 +1,6 @@
 import random
 import numpy as np
+import tensorflow as tf
 
 
 class Policy:
@@ -57,9 +58,6 @@ class Greedy(Policy):
         :return:
         """
 
-        idx = np.argmax(actions)
-
-        action = np.zeros((1, actions.shape[0]))
-        action[:, idx] = 1
+        action = tf.one_hot(tf.argmax(actions), 9)
 
         return action
