@@ -8,8 +8,6 @@ physical_devices = tf.config.list_physical_devices('GPU')
 
 tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
-
-
 class Simulator:
 
     def __init__(self, players, env):
@@ -22,28 +20,29 @@ class Simulator:
         self.env = env(self.players.keys())
         self.active_player = None
 
-    def play(self, episodes, greedy=False, max_steps=None):
+    def play(self, episodes, greedy=False, max_steps=None, update=True, save_model=True):
 
         games_per_episode = []
 
-
         for episode in range(episodes):
-            print(f'Episode: {episode}')
+
+            if episode % 100 == 0:
+                print(f'Episode: {episode}')
 
             [player.reset() for player in self.players.values()]
             self.active_player = self.env.reset()
 
             done = False
 
-            import time
-            start_time = time.time()
+            #import time
+            #start_time = time.time()
 
             steps = 0
             while not done:
                 active_player = self.players[self.active_player]
 
-                state, previous_rewards, legal_actions = self.env.observe(active_player.id)
-                active_player.observe(state, previous_rewards, legal_actions)
+                state, previous_rewards, legal_actions, done = self.env.observe(active_player.id)
+                active_player.observe(state, previous_rewards, legal_actions, done)
                 action = active_player.play(state, legal_actions, greedy)
 
                 done, self.active_player, info = self.env.step(self.active_player, action)
@@ -52,25 +51,33 @@ class Simulator:
                 if max_steps is not None and steps >= max_steps:
                     break
 
-            print(f'Playing player took {time.time() - start_time} seconds')
-            start_time = time.time()
+            #print(f'Playing player took {time.time() - start_time} seconds')
+            #start_time = time.time()
 
 
             # observe final reward
             games_per_episode.append(steps)
             [player.observe(*self.env.observe(player.id)) for player in self.players.values()]
-            [player.update() for player in self.players.values()]
+            #print(self.env.rewards)
 
-            print(f'Updating player took {time.time() - start_time} seconds')
-            start_time = time.time()
+            if update:
+                [player.update() for player in self.players.values()]
 
-        [print(player.reward_hist) for player in self.players.values()]
+            #print(f'Updating player took {time.time() - start_time} seconds')
+
+        #[print(player.reward_hist) for player in self.players.values()]
+
+        if save_model:
+            [player.save_model() for player in self.players.values()]
         return
 
     def plot_performance(self):
 
         player_1_rewards = self.players['player_1'].reward_hist
         player_2_rewards = self.players['player_2'].reward_hist
+
+        player_1_loss = self.players['player_1'].loss_hist
+        player_2_loss = self.players['player_2'].loss_hist
 
         player_1_turns = self.players['player_1'].turn_hist
         player_2_turns = self.players['player_2'].turn_hist
@@ -81,16 +88,16 @@ class Simulator:
         print('Player 2 rewards')
         print(sum(player_2_rewards))
 
-        print(player_1_rewards)
-        print(player_2_rewards)
+        #print(player_1_rewards)
+        #print(player_2_rewards)
 
         print('Player 1 turns')
         print(sum(player_1_turns))
         print('Player 2 turns')
         print(sum(player_2_turns))
 
-        print(player_1_turns)
-        print(player_2_turns)
+        #print(player_1_turns)
+        #print(player_2_turns)
 
         roll_1 = [sum(player_1_rewards[max(0, a - 100):a + 1]) / (a + 1 - max(0, a - 100)) for a, b in
                   enumerate(player_1_rewards)]
@@ -103,15 +110,15 @@ class Simulator:
         # print(player_1.loss_hist)
         # print(player_2.loss_hist)
 
-        loss_roll_1 = [sum(player_1.loss_hist[max(0, a - 100):a + 1]) / (a + 1 - max(0, a - 100)) for a, b in
-                       enumerate(player_1.loss_hist)]
-        loss_roll_2 = [sum(player_2.loss_hist[max(0, a - 100):a + 1]) / (a + 1 - max(0, a - 100)) for a, b in
-                       enumerate(player_2.loss_hist)]
+        loss_roll_1 = [sum(player_1_loss[max(0, a - 100):a + 1]) / (a + 1 - max(0, a - 100)) for a, b in
+                       enumerate(player_1_loss)]
+        loss_roll_2 = [sum(player_2_loss[max(0, a - 100):a + 1]) / (a + 1 - max(0, a - 100)) for a, b in
+                       enumerate(player_2_loss)]
         plt.plot(list(range(len(loss_roll_1))), loss_roll_1)
         plt.plot(list(range(len(loss_roll_2))), loss_roll_2)
         plt.show()
-        loss_roll_1 = loss_roll_1[50:]
-        loss_roll_2 = loss_roll_2[50:]
+        loss_roll_1 = loss_roll_1[1000:]
+        loss_roll_2 = loss_roll_2[1000:]
 
         plt.plot(list(range(len(loss_roll_1))), loss_roll_1)
         plt.plot(list(range(len(loss_roll_2))), loss_roll_2)
@@ -131,6 +138,15 @@ start_time = time.time()
 player_1 = AI('player_1')
 player_2 = AI('player_2')
 simulator = Simulator([player_1, player_2], TicTacToeEnv)
+
+#player_1.load_model()
+#player_2.load_model()
+
+#simulator.play(episodes=1, greedy=True, update=False, save_model=False)
+#print(simulator.env.visualize_board())
+
+
+#exit()
 simulator.play(episodes=10000, greedy=False)
 simulator.plot_performance()
 

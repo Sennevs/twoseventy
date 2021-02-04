@@ -9,11 +9,13 @@ class QNetwork(Model):
         super().__init__()
 
         self.layer_1 = Concatenate()
-        self.layer_2 = Dense(64, activation='relu')
+        self.layer_2 = Dense(1024, activation='relu')
         self.layer_3 = BatchNormalization()
-        self.layer_4 = Dense(32, activation='relu')
+        self.layer_4 = Dense(128, activation='relu')
         self.layer_5 = BatchNormalization()
-        self.layer_6 = Dense(1, activation='linear')
+        self.layer_6 = Dense(64, activation='relu')
+        self.layer_7 = BatchNormalization()
+        self.layer_8 = Dense(1, activation='tanh')
 
         return
 
@@ -21,9 +23,11 @@ class QNetwork(Model):
 
         y = self.layer_1(inputs)
         y = self.layer_2(y)
-        y = self.layer_3(y)
-        y = self.layer_4(y)
-        y = self.layer_5(y)
-        y = self.layer_6(y)
+        #y = self.layer_3(y)
+        #y = self.layer_4(y)
+        #y = self.layer_5(y)
+        #y = self.layer_6(y)
+        y = self.layer_7(y)
+        y = self.layer_8(y)
 
         return y

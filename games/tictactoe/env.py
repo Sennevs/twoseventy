@@ -146,10 +146,7 @@ class TicTacToeEnv(Env):
 
     def get_legal_actions(self):
 
-        if self.done:
-            ans = None
-        else:
-            ans = self.board.sum(axis=1)
+        ans = self.board.sum(axis=1)
 
         return ans
 
@@ -157,11 +154,14 @@ class TicTacToeEnv(Env):
 
         legal_actions = self.get_legal_actions()
 
-        return self.board.reshape(-1), self.rewards[player], legal_actions
+        done = self.done
+
+        return self.board.reshape(-1), self.rewards[player], legal_actions, done
 
     def check_win(self):
 
-        eval_board = self.board[:, self._turn_starts.index(self.active_player)].reshape([self.board_size, self.board_size])
+        eval_board = self.board[:, self._turn_starts.index(self.active_player)].reshape([self.board_size,
+                                                                                         self.board_size])
 
         rows = eval_board.sum(axis=0)
         cols = eval_board.sum(axis=1)
@@ -198,5 +198,3 @@ class TicTacToeEnv(Env):
     def close(self):
 
         return
-
-

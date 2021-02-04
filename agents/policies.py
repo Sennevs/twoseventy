@@ -2,6 +2,8 @@ import random
 import numpy as np
 import tensorflow as tf
 
+import tensorflow_probability as tfp
+
 
 class Policy:
 
@@ -21,7 +23,7 @@ class EGreedy(Policy):
 
         self.epsilon = epsilon
 
-    def sample(self, actions):
+    def sample(self, actions, legal_actions):
         """
 
         :param q_function:
@@ -32,14 +34,22 @@ class EGreedy(Policy):
 
         greedy = random.random() > self.epsilon
 
-        if greedy:
-            idx = np.argmax(actions)
-        else:
-            idx = random.randrange(actions.shape[0])
-            print(idx)
+        optimal_probs = (tf.exp(actions) / tf.reduce_sum(tf.exp(actions))) * tf.cast(
+            tf.reshape((legal_actions - 1) * -1, (9, 1)), dtype=tf.float32)
 
-        action = np.zeros((1, actions.shape[0]))
-        action[:, idx] = 1
+        if greedy:
+            idx = tf.argmax(optimal_probs, axis=0)
+        else:
+            print('Just did a rando')
+
+            s = tfp.distributions.Normal(1, 1)
+            samples = tf.abs(s.sample((9,1)))
+
+            optimal_probs *= samples
+
+            idx = tf.argmax(optimal_probs, axis=0)
+
+        action = tf.one_hot(idx, tf.shape(actions)[0])
 
         return action
 
@@ -58,6 +68,37 @@ class Greedy(Policy):
         :return:
         """
 
-        action = tf.one_hot(tf.argmax(actions), 9)
+        action = tf.one_hot(tf.argmax(actions), tf.shape(actions)[0])
+
+
+
+        '''
+        optimal_probs = (tf.exp(actions) / tf.reduce_sum(tf.exp(actions))) * tf.cast(
+            tf.reshape((legal_actions - 1) * -1, (9, 1)), dtype=tf.float32)
+
+        action = tf.one_hot(tf.argmax(optimal_probs, axis=0), 9)'''
 
         return action
+
+
+class Greedy2(Policy):
+
+    def __init__(self):
+        super().__init__()
+
+    def sample(self, actions, legal_actions):
+        """
+
+        :param q_function:
+        :param state:
+        :param action_space:
+        :return:
+        """
+
+        optimal_probs = (tf.exp(actions) / tf.reduce_sum(tf.exp(actions))) * tf.cast(
+            tf.reshape((legal_actions - 1) * -1, (9, 1)), dtype=tf.float32)
+
+        action = tf.one_hot(tf.argmax(optimal_probs, axis=0), 9)
+
+        return action
+
