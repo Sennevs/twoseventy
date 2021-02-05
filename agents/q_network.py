@@ -1,4 +1,4 @@
-from tensorflow.keras.layers import Dense, BatchNormalization, Concatenate, Embedding, Flatten, Dropout
+from tensorflow.keras.layers import Dense, BatchNormalization, Concatenate, Embedding, Flatten, Dropout, Input
 from tensorflow.keras import Model
 
 

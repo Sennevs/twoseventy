@@ -1,12 +1,13 @@
+import tensorflow as tf
+physical_devices = tf.config.list_physical_devices('GPU')
+
+tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
 import matplotlib.pyplot as plt
 
 from games.tictactoe.agent import AI
 from games.tictactoe.env import TicTacToeEnv
 
-import tensorflow as tf
-physical_devices = tf.config.list_physical_devices('GPU')
-
-tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 class Simulator:
 

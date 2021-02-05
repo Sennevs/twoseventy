@@ -5,8 +5,9 @@ from tensorflow.keras.losses import mean_squared_error
 from tensorflow.keras.optimizers import Adam, SGD
 
 from agents.q_network import QNetwork
-from agents.policies import EGreedy, Greedy, Greedy2
+from agents.policies import greedy, e_greedy
 from agents.replay_buffer import ReplayBuffer
+from agents.memory_buffer import MemoryBuffer
 
 import os
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
@@ -14,115 +15,152 @@ os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 BATCH_SIZE = 100
 
+class DQL:
 
-class AI:
+    def __init__(self, action_space, discount_factor=0.9, q_lr=0.001, target_lr=0.0001):
 
-    def __init__(self, agent_id):
-
-        self.id = agent_id
-
-        # model params - this part needs to be rewritten, so we can dynamically choose the config params
         self.q = QNetwork()
         self.q_target = QNetwork()
-        self.discount_factor = 0.9
-        self.policy = EGreedy(epsilon=0.1)
-        self.policy_greedy = Greedy()
-        self.policy_greedy2 = Greedy2()
-        self.q_optimizer = Adam(0.001)
-        self.q_target_optimizer = SGD(0.001)
+        self.discount_factor = DQL
+        self.q_optimizer = Adam(q_lr)
+        self.q_target_optimizer = SGD(target_lr)
 
-        # not sure if this should be list or numpy/tensor
-        # this is what we need to keep track of the environment to let our agent reflect and learn from its interactions
+        self.action_space = action_space
 
-        # replay buffer still needs to be implemented and is currently not in use
-        self.replay_buffer = ReplayBuffer()
-        self.use_rb = False
+        self.loss = []
 
-        self.turn = None
+        self.train_policy = e_greedy
+        self.play_policy = greedy
 
-        # metrics
-        self.loss_hist = []
-        self.reward_hist = []
-        self.turn_hist = []
+    def train(self, target):
 
-        self.episodes = 0
+        pass
 
-        self._turn_rewards = []
+    #@tf.function
+    def predict(self, state, mask=None, explore=True):
+        """
 
-        self.memory = {'state': None, 'action': None, 'action_space': None}
-
-    def play(self, state, legal_actions, greedy=False, target=False):
-
-        self.turn += 1
-
-        greedy = tf.convert_to_tensor(greedy)
-        target = tf.convert_to_tensor(target)
-
-        state = tf.convert_to_tensor(state)
-        legal_actions = tf.convert_to_tensor(legal_actions)
-
-        optimal_action = self.inner_play(state, legal_actions, greedy, target)
-        self.memory['action'] = optimal_action
-        optimal_action = optimal_action.numpy().reshape([9])
-        return optimal_action
-
-    @tf.function
-    def inner_play(self, state, legal_actions, greedy, target):
-
-        #legal_idx = tf.reshape(tf.where(tf.math.equal(legal_actions, tf.constant(0, dtype=tf.float64))), (-1, 1))
-
-        all_actions = tf.linalg.set_diag(tf.zeros([9, 9]), tf.fill([9], tf.constant(1, tf.float32)))
-
-        #legal_action = tf.reshape(tf.gather(next_actions_full, legal_idx), (-1, 9))
-
-        state = tf.repeat(tf.reshape(state, (1, -1)), 9, axis=0)
-
-        def true_return():
-            return self.q_target([state, all_actions])
-
-        def false_return():
-            return self.q([state, all_actions])
-
-        optimal_actions = tf.cond(target, true_return, false_return)
-
-        print(optimal_actions)
-        print(tf.reshape(legal_actions, (1, 9)))
+        :param state: Tensor None x state_size
+        :param mask: Tensor None x action_size, bool
+        :param explore:
+        :return:
+        """
 
 
-        # loop over legal actions and select action with highest q-value\
-        #if target:
-        #   optimal_actions = self.q_target([state, legal_actions])
-        #else:
-        #   optimal_actions = self.q([state, legal_actions])
+        all_actions = tf.broadcast_to(tf.reshape(tf.linalg.set_diag(tf.zeros([self.action_space, self.action_space]),
+                                         tf.fill([self.action_space], tf.constant(1, tf.float32))), (1, self.action_space, self.action_space)), [tf.shape(mask)[0], self.action_space, self.action_space])
+        all_states = tf.broadcast_to(tf.reshape(state, (tf.shape(state)[0], 1, tf.shape(state)[1])), [tf.shape(mask)[0], self.action_space, tf.shape(state)[1]])
 
-        # print(optimal_actions)
+        if mask is not None:
 
-        def true_return():
-            return self.policy_greedy2.sample(optimal_actions, legal_actions)
+            legal_actions = tf.ragged.boolean_mask(all_actions, mask)
+            #legal_actions_idx =
+            legal_states = tf.ragged.boolean_mask(all_states, mask)
+        else:
+            legal_actions = all_actions
+            legal_states = all_states
 
-        def false_return():
-            return self.policy.sample(optimal_actions, legal_actions)
+        # get broadcast idx
 
-        optimal_idx = tf.cond(greedy, true_return, false_return)
+        la_idx = legal_actions.nested_row_lengths()
+        ls_idx = legal_states.nested_row_lengths()
 
-        #if greedy:
-        #   optimal_idx = self.policy_greedy.sample(optimal_actions)
-        #else:
-        #   optimal_idx = self.policy.sample(optimal_actions)
+        # transform to tensors again
 
-        # print(optimal_idx)
+
+        print(legal_actions)
+        print(legal_states)
+
+        legal_actions = legal_actions.merge_dims(inner_axis=1, outer_axis=0)
+        legal_states = legal_states.merge_dims(inner_axis=1, outer_axis=0)
+
+        print(legal_actions)
+        print(legal_states)
+
+        q_values = self.q_target.predict([legal_states, legal_actions])
+        print(q_values)
+
+
+
+        print(la_idx)
+        # transform q-values to ragged tensor based on idx
+        q_values = tf.RaggedTensor.from_nested_row_lengths(q_values, la_idx)
+        legal_actions = tf.RaggedTensor.from_nested_row_lengths(legal_actions, ls_idx)
+
+        print(q_values)
+
+        def a_arg_max(inputs):
+
+            q_values, actions = inputs
+            idx = tf.argmax(q_values)
+            opt_action = tf.reshape(tf.gather(actions, idx), (-1,))
+
+            return opt_action
+
+        print(legal_actions)
+        optimal_idx = tf.map_fn(a_arg_max, elems=[q_values, legal_actions],
+                                fn_output_signature=tf.TensorSpec(shape=[4,], dtype=tf.float32))
+
+        # should replace this to policy part later
+        print(optimal_idx)
+        #
+
+        #optimal_idx = self.train_policy(q_values) if explore else self.play_policy(q_values)
 
         print(optimal_idx)
         next_action = tf.reshape(optimal_idx, (-1,))
         # print(next_action)
-        #optimal_action = tf.scatter_nd(legal_idx, next_action, tf.constant([9], dtype=tf.int64))
-        #optimal_action = tf.reshape(optimal_action, (1, 9))
+        # optimal_action = tf.scatter_nd(legal_idx, next_action, tf.constant([9], dtype=tf.int64))
+        # optimal_action = tf.reshape(optimal_action, (1, 9))
 
-
-        #print(optimal_action)
+        # print(optimal_action)
 
         # self.previous_actions.append(optimal_actions)
         return next_action
+
+
+beh = DQL(action_space=4)
+
+state = tf.convert_to_tensor([[1, 0, 0, 0], [1, 0, 0, 1]], dtype=tf.float32)
+mask = tf.convert_to_tensor([[True, False, False, True], [False, False, False, True]])
+
+
+beh.predict(state=state, mask=mask, explore=True)
+
+exit()
+
+
+class AI:
+
+    def __init__(self, agent_id, behavior, replay_buffer=True):
+
+        self.id = agent_id
+        self.behavior = behavior
+        self.replay_buffer = ReplayBuffer() if replay_buffer else None
+        self.memory_buffer = MemoryBuffer(['state', 'action', 'action_space'], 1)
+
+        self.turn = 0
+        self.episode = 0
+
+    def play(self, state, mask, explore=True):
+        """
+
+        :param state:
+        :param mask:
+        :return:
+        """
+
+        self.turn += 1
+
+        state = tf.convert_to_tensor(state)
+        mask = tf.convert_to_tensor(mask)
+
+        optimal_action = self.behavior.predict(state, mask, explore)
+        self.memory_buffer.store(action=optimal_action)
+
+        return optimal_action
+
+
 
 
     def observe(self, state, reward, action_space, done):
@@ -274,5 +312,14 @@ class AI:
         return
 
 
+'''
+beh = DQL()
+ai = AI('1', beh)
 
+state = np.array([[0, 0, 0, 1, 0]])
+mask = np.array([0, 0, 1, 1])
+print(ai.play(state, mask))
+
+exit()
+'''
 

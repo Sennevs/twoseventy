@@ -6,7 +6,7 @@ from tensorflow.keras.losses import mean_squared_error
 from tensorflow.keras.optimizers import Adam, SGD
 
 from .q_network import QNetwork
-from .policies import EGreedy, Greedy
+from .policies import e_greedy, greedy
 from .replay_buffer import ReplayBuffer
 
 BATCH_SIZE = 1
