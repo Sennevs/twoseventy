@@ -7,7 +7,7 @@ import tensorflow as tf
 from agents.replay_buffer import ReplayBuffer
 from agents.memory_buffer import MemoryBuffer
 
-BATCH_SIZE = 100
+BATCH_SIZE = 32
 
 
 class AI:
@@ -17,7 +17,7 @@ class AI:
         self.id = agent_id
         self.behavior = behavior
         self.replay_buffer = ReplayBuffer() if replay_buffer else None
-        self.memory_buffer = MemoryBuffer(['state', 'action', 'action_space'], 1)
+        self.memory_buffer = MemoryBuffer(['state', 'action', 'action_space'], 2)
 
         self.turn = 0
         self.episode = 0
@@ -51,11 +51,6 @@ class AI:
 
             old_state, old_action, old_action_space = self.memory_buffer.retrieve(1)
 
-            print('aaaaa')
-            print(old_state)
-            print(old_action)
-            print(old_action_space)
-
             self.replay_buffer.add_sample(state=old_state,
                                           action=old_action,
                                           action_space=old_action_space,
@@ -78,6 +73,18 @@ class AI:
 
         return
 
+    def save_model(self):
+
+        self.behavior.save_model(self.id)
+
+        return
+
+    def load_model(self):
+
+        self.behavior.load_model()
+
+        return
+
     def update(self):
 
         if self.replay_buffer.current_size != 0:
@@ -90,8 +97,4 @@ class AI:
         self.episode += 1
 
         return loss
-
-
-
-#### testing
 

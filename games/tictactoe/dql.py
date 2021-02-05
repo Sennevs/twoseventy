@@ -10,7 +10,7 @@ from agents.policies import egreedy_ragged, greedy_ragged
 
 class DQL:
 
-    def __init__(self, action_space, discount_factor=0.9, q_lr=0.001, target_lr=0.0001):
+    def __init__(self, action_space, discount_factor=0.9, q_lr=0.001, target_lr=0.01):
 
         self.q = QNetwork()
         self.q_target = QNetwork()
@@ -19,18 +19,16 @@ class DQL:
         self.q_target_optimizer = tf.optimizers.SGD(target_lr)
 
         self.action_space = action_space
+        self.state_space = 18
 
         self.loss = []
 
         self.train_policy = egreedy_ragged
         self.play_policy = greedy_ragged
 
-    def train(self, target):
 
-        pass
-
-    #@tf.function
-    def predict(self, state, action_mask=None, explore=True):
+    @tf.function
+    def predict(self, state, action_mask=None, explore=True, target=False):
 
         """
 
@@ -40,14 +38,9 @@ class DQL:
         :return:
         """
 
-        print('hello')
-        print(state)
-        print(action_mask)
-
         all_actions = tf.broadcast_to(tf.reshape(tf.linalg.set_diag(tf.zeros([self.action_space, self.action_space]),
                                          tf.fill([self.action_space], tf.constant(1, tf.float32))), (1, self.action_space, self.action_space)), [tf.shape(action_mask)[0], self.action_space, self.action_space])
-        all_states = tf.broadcast_to(tf.reshape(state, (tf.shape(state)[0], 1, tf.shape(state)[1])), [tf.shape(action_mask)[0], self.action_space, tf.shape(state)[1]])
-
+        all_states = tf.broadcast_to(tf.reshape(state, (tf.shape(state)[0], 1, tf.shape(state)[1])), [tf.shape(action_mask)[0], self.action_space, self.state_space])
 
         legal_actions = all_actions if action_mask is None else tf.ragged.boolean_mask(all_actions, action_mask)
         legal_states = all_actions if action_mask is None else tf.boolean_mask(all_states, action_mask)
@@ -55,12 +48,11 @@ class DQL:
         # transform to tensors again
         legal_actions_tensor = legal_actions.merge_dims(inner_axis=1, outer_axis=0)
 
-        legal_states = tf.reshape(legal_states, (-1, tf.shape(state)[1]))
-        legal_actions_tensor = tf.reshape(legal_actions_tensor, (-1, self.action_space))
 
-        print(legal_states)
-        print(legal_actions_tensor)
-        q_values = self.q_target([legal_states, legal_actions_tensor])
+        q_values1 = self.q_target([legal_states, legal_actions_tensor])
+        q_values2 = self.q([legal_states, legal_actions_tensor])
+        q_values = q_values1 if target else q_values2
+
 
         # transform q-values to ragged tensor based on idx
         q_values = tf.RaggedTensor.from_nested_row_lengths(q_values, legal_actions.nested_row_lengths())
@@ -74,7 +66,7 @@ class DQL:
 
         return optimal_action
 
-    #@tf.function
+    @tf.function
     def train(self, states, actions, rewards, next_states, action_masks, next_action_masks, dones):
 
         rewards = tf.cast(rewards, tf.float32)
@@ -85,37 +77,20 @@ class DQL:
         rewards_nd = tf.boolean_mask(rewards, not_dones_mask, axis=0)
         next_states_nd = tf.boolean_mask(next_states, not_dones_mask, axis=0)
         next_action_masks_nd = tf.boolean_mask(next_action_masks, not_dones_mask, axis=0)
-
-
         target_q_value_d = rewards_d
 
-        print(target_q_value_d)
-
-
-        next_actions_nd = self.predict(next_states_nd, next_action_masks_nd)
-
-        print(['a:'])
-        print(next_actions_nd)
+        next_actions_nd = self.predict(next_states_nd, next_action_masks_nd, target=True)
 
         rewards_nd = tf.reshape(tf.cast(rewards_nd, tf.float32), (-1, 1))
-        print(next_states_nd)
+
         target_q_value_nd = rewards_nd + self.discount_factor * self.q([next_states_nd, next_actions_nd])
 
-        print(rewards_nd)
-        print(self.discount_factor)
-        print(next_actions_nd)
-
         if tf.shape(target_q_value_d)[0] == 0:
-            print('a')
             target_q_values = target_q_value_nd
         elif tf.shape(target_q_value_nd)[0] == 0:
-            print('b')
 
             target_q_values = target_q_value_d
         else:
-            print('c')
-
-            print(target_q_value_nd)
             # combine them again
             done_idx = tf.cast(tf.where(dones_mask), tf.int32)
             not_done_idx = tf.cast(tf.where(not_dones_mask), tf.int32)
@@ -123,8 +98,6 @@ class DQL:
             f_foo = tf.scatter_nd(not_done_idx, tf.reshape(target_q_value_nd, (-1, 1)), shape=(tf.shape(actions)[0], 1))
             target_q_values = t_foo + f_foo
 
-        print(states)
-        print(actions)
         # compute td error
         with tf.GradientTape() as tape:
             q_values = self.q([states, actions])

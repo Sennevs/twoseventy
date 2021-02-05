@@ -6,7 +6,7 @@ import numpy as np
 
 class ReplayBuffer:
 
-    def __init__(self, max_size=10000):
+    def __init__(self, max_size=1000):
 
         self.data = deque()
         self.max_size = max_size
@@ -16,20 +16,10 @@ class ReplayBuffer:
 
     def sample(self, size):
 
-        print('!!!!!!!!!!!!!!!!!!!!!!')
-        #print(self.data)
-
         samples = [random.randrange(self.current_size) for _ in range(size)]
         return_data = [self.data[i] for i in samples]
         return_data = list(map(list, zip(*return_data)))
-        print(return_data)
-        print('^^^^')
-        [print((i)) for i in return_data]
-        print('******')
-        [print((i[0])) for i in return_data]
         return_data = [tf.convert_to_tensor(np.vstack(i)) for i in return_data]
-        print('++++++')
-        print(return_data)
 
         return tuple(return_data)
 

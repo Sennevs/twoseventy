@@ -35,7 +35,7 @@ class MemoryBuffer:
                               'information. Please adjust the buffer size or evaluate your code for bugs if this '
                               'behavior is not intended.')
         else:
-            self.size += min(len(value) for value in self.data.values())
+            self.size = min(len(value) for value in self.data.values())
 
         [self.data[key].append(value) for key, value in kwargs.items()]
 

@@ -23,6 +23,7 @@ class Simulator:
         self.active_player = None
 
         self.loss_hist = {player.id: [] for player in players}
+        self.reward_hist = {player.id: [] for player in players}
 
     def play(self, episodes, greedy=False, max_steps=None, update=True, save_model=True):
 
@@ -55,25 +56,34 @@ class Simulator:
                 if max_steps is not None and steps >= max_steps:
                     break
 
-            #print(f'Playing player took {time.time() - start_time} seconds')
-            #start_time = time.time()
-
+            # print(f'Playing player took {time.time() - start_time} seconds')
+            # start_time = time.time()
 
             # observe final reward
             games_per_episode.append(steps)
             [player.observe(*self.env.observe(player.id)) for player in self.players.values()]
-            #print(self.env.rewards)
+            [self.reward_hist[key].append(value) for key, value in self.env.rewards.items()]
+            # print(self.env.rewards)
 
             if update:
                 [self.loss_hist[player.id].append(player.update()) for player in self.players.values()]
 
+            if episode % 100 == 0:
+                for key, value in self.loss_hist.items():
+                    print(f'{key} Average loss for last 100 updates: {sum(value[-100:]) / len(value[-100:])}')
+                for key, value in self.reward_hist.items():
+                    print(f'{key} Average reward for last 100 updates: {sum(value[-100:]) / len(value[-100:])}')
+                for key, value in self.reward_hist.items():
+                    print(f'{key} Average number of ties for last 100 updates: {value[-100:].count(0) / len(value[-100:])}')
 
-            #if episode % 100 == 0:
-            #    print(f'Average loss for last 100 updates: {sum(self.loss_hist[-100:]) / len(self.loss_hist[-100:])}')
+            if episode % 1000 == 0:
+                print('Visualizing board:')
+                print(self.env.visualize_board())
 
-            #print(f'Updating player took {time.time() - start_time} seconds')
 
-        #[print(player.reward_hist) for player in self.players.values()]
+            # print(f'Updating player took {time.time() - start_time} seconds')
+
+        # [print(player.reward_hist) for player in self.players.values()]
 
         if save_model:
             [player.save_model() for player in self.players.values()]
@@ -81,28 +91,28 @@ class Simulator:
 
     def plot_performance(self):
 
-        player_1_rewards = self.players['player_1'].reward_hist
-        player_2_rewards = self.players['player_2'].reward_hist
+        player_1_rewards = self.reward_hist['player_1']
+        player_2_rewards = self.reward_hist['player_2']
 
-        player_1_loss = self.players['player_1'].loss_hist
-        player_2_loss = self.players['player_2'].loss_hist
+        player_1_loss = self.loss_hist['player_1']
+        player_2_loss = self.loss_hist['player_2']
 
-        player_1_turns = self.players['player_1'].turn_hist
-        player_2_turns = self.players['player_2'].turn_hist
+        #player_1_turns = self.players['player_1'].turn_hist
+        #player_2_turns = self.players['player_2'].turn_hist
 
 
-        print('Player 1 rewards')
-        print(sum(player_1_rewards))
-        print('Player 2 rewards')
-        print(sum(player_2_rewards))
+        #print('Player 1 rewards')
+        #print(sum(player_1_rewards))
+        #print('Player 2 rewards')
+        #print(sum(player_2_rewards))
 
         #print(player_1_rewards)
         #print(player_2_rewards)
 
-        print('Player 1 turns')
-        print(sum(player_1_turns))
-        print('Player 2 turns')
-        print(sum(player_2_turns))
+        #print('Player 1 turns')
+        #print(sum(player_1_turns))
+        #print('Player 2 turns')
+        #print(sum(player_2_turns))
 
         #print(player_1_turns)
         #print(player_2_turns)
@@ -112,8 +122,8 @@ class Simulator:
         roll_2 = [sum(player_2_rewards[max(0, a - 100):a + 1]) / (a + 1 - max(0, a - 100)) for a, b in
                   enumerate(player_2_rewards)]
 
-        print(roll_1)
-        print(roll_2)
+        #print(roll_1)
+        #print(roll_2)
 
         # print(player_1.loss_hist)
         # print(player_2.loss_hist)
@@ -157,7 +167,7 @@ simulator = Simulator([player_1, player_2], TicTacToeEnv)
 
 
 #exit()
-simulator.play(episodes=10000, greedy=False)
+simulator.play(episodes=25000, greedy=False)
 simulator.plot_performance()
 
 print(f'Runtime was {time.time() - start_time} seconds.')

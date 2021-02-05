@@ -75,6 +75,8 @@ class TicTacToeEnv(Env):
 
         self.done = False
 
+        # print(f'Player {self.active_player} starts.')
+
         return self.active_player
 
     def initialize_turn_sequence(self):

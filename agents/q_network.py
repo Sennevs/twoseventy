@@ -23,8 +23,8 @@ class QNetwork(Model):
 
         y = self.layer_1(inputs)
         y = self.layer_2(y)
-        #y = self.layer_3(y)
-        #y = self.layer_4(y)
+        y = self.layer_3(y)
+        y = self.layer_4(y)
         #y = self.layer_5(y)
         #y = self.layer_6(y)
         y = self.layer_7(y)
