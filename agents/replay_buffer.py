@@ -1,6 +1,7 @@
 from collections import deque
 import random
 import tensorflow as tf
+import numpy as np
 
 
 class ReplayBuffer:
@@ -15,10 +16,20 @@ class ReplayBuffer:
 
     def sample(self, size):
 
+        print('!!!!!!!!!!!!!!!!!!!!!!')
+        #print(self.data)
+
         samples = [random.randrange(self.current_size) for _ in range(size)]
         return_data = [self.data[i] for i in samples]
         return_data = list(map(list, zip(*return_data)))
-        return_data = [tf.stack(i) for i in return_data]
+        print(return_data)
+        print('^^^^')
+        [print((i)) for i in return_data]
+        print('******')
+        [print((i[0])) for i in return_data]
+        return_data = [tf.convert_to_tensor(np.vstack(i)) for i in return_data]
+        print('++++++')
+        print(return_data)
 
         return tuple(return_data)
 

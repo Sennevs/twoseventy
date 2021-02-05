@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 
 from games.tictactoe.agent import AI
 from games.tictactoe.env import TicTacToeEnv
+from games.tictactoe.dql import DQL
 
 
 class Simulator:
@@ -20,6 +21,8 @@ class Simulator:
         self.players = {player.id: player for player in players}
         self.env = env(self.players.keys())
         self.active_player = None
+
+        self.loss_hist = {player.id: [] for player in players}
 
     def play(self, episodes, greedy=False, max_steps=None, update=True, save_model=True):
 
@@ -62,7 +65,11 @@ class Simulator:
             #print(self.env.rewards)
 
             if update:
-                [player.update() for player in self.players.values()]
+                [self.loss_hist[player.id].append(player.update()) for player in self.players.values()]
+
+
+            #if episode % 100 == 0:
+            #    print(f'Average loss for last 100 updates: {sum(self.loss_hist[-100:]) / len(self.loss_hist[-100:])}')
 
             #print(f'Updating player took {time.time() - start_time} seconds')
 
@@ -136,8 +143,10 @@ class Simulator:
 import time
 
 start_time = time.time()
-player_1 = AI('player_1')
-player_2 = AI('player_2')
+behavior_1 = DQL(action_space=9)
+behavior_2 = DQL(action_space=9)
+player_1 = AI('player_1', behavior=behavior_1)
+player_2 = AI('player_2', behavior=behavior_2)
 simulator = Simulator([player_1, player_2], TicTacToeEnv)
 
 #player_1.load_model()

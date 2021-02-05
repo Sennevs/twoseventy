@@ -146,7 +146,7 @@ class TicTacToeEnv(Env):
 
     def get_legal_actions(self):
 
-        ans = self.board.sum(axis=1)
+        ans = ~self.board.sum(axis=1).astype(bool).reshape((1, -1))
 
         return ans
 
@@ -156,7 +156,7 @@ class TicTacToeEnv(Env):
 
         done = self.done
 
-        return self.board.reshape(-1), self.rewards[player], legal_actions, done
+        return self.board.reshape(1, -1), np.array([self.rewards[player]]), legal_actions, np.array([done])
 
     def check_win(self):
 

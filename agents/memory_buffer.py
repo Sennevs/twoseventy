@@ -35,16 +35,13 @@ class MemoryBuffer:
                               'information. Please adjust the buffer size or evaluate your code for bugs if this '
                               'behavior is not intended.')
         else:
-            self.size += 1
+            self.size += min(len(value) for value in self.data.values())
 
         [self.data[key].append(value) for key, value in kwargs.items()]
 
         return
 
     def retrieve(self, steps):
-
-        print(steps)
-        print(self.size)
 
         if steps > self.size:
             print_warning(f'Warning: Requested steps ({steps}) is bigger than current buffer size ({self.size}). '
@@ -55,6 +52,13 @@ class MemoryBuffer:
         self.size -= steps
 
         return ans.values()
+
+    def reset(self):
+
+        self.data = {value: deque() for value in self.values}
+        self.size = 0
+
+        return
 
 
 '''

@@ -72,5 +72,19 @@ def greedy(filter=None):
 
         return action
 
+def greedy_ragged(inputs):
+    q_values, actions = inputs
+    idx = tf.argmax(q_values)
+    opt_action = tf.reshape(tf.gather(actions, idx), (-1,))
+
+    return opt_action
+
+
+def egreedy_ragged(inputs):
+    q_values, actions = inputs
+    idx = tf.argmax(q_values)
+    opt_action = tf.reshape(tf.gather(actions, idx), (-1,))
+
+    return opt_action
 
 
