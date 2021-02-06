@@ -158,7 +158,8 @@ class TicTacToeEnv(Env):
 
         done = self.done
 
-        return self.board.reshape(1, -1), np.array([self.rewards[player]]), legal_actions, np.array([done])
+
+        return self.board.transpose(1,0).reshape(1, -1), np.array([self.rewards[player]]), legal_actions, np.array([done])
 
     def check_win(self):
 

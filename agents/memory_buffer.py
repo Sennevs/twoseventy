@@ -28,6 +28,9 @@ class MemoryBuffer:
         :return:
         """
 
+        [self.data[key].append(value) for key, value in kwargs.items()]
+
+
         if self.size >= self.buffer_size:
             [value.popleft() for key, value in self.data.items()]
 
@@ -37,7 +40,6 @@ class MemoryBuffer:
         else:
             self.size = min(len(value) for value in self.data.values())
 
-        [self.data[key].append(value) for key, value in kwargs.items()]
 
         return
 

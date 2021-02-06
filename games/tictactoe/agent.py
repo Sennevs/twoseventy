@@ -38,29 +38,29 @@ class AI:
         state = tf.convert_to_tensor(state)
         mask = tf.convert_to_tensor(mask)
 
-        optimal_action = self.behavior.predict(state, mask, explore)
+        optimal_action = self.behavior.predict(state, mask, explore, target=False)
 
         optimal_action = optimal_action.numpy().reshape(-1)
-        self.memory_buffer.store(action=optimal_action)
 
         return optimal_action
 
-    def observe(self, state, reward, action_space, done):
+    def observe(self, state, reward, action_space, done, action):
 
         if self.memory_buffer.size > 0:
 
             old_state, old_action, old_action_space = self.memory_buffer.retrieve(1)
 
-            self.replay_buffer.add_sample(state=old_state,
-                                          action=old_action,
-                                          action_space=old_action_space,
-                                          reward=reward,
-                                          next_state=state,
-                                          next_action_space=action_space,
-                                          done=done)
+            self.replay_buffer.add_sample(state=old_state.copy(),
+                                          action=old_action.copy(),
+                                          action_space=old_action_space.copy(),
+                                          reward=reward.copy(),
+                                          next_state=state.copy(),
+                                          next_action_space=action_space.copy(),
+                                          done=done.copy())
             self._turn_rewards.append(reward)
 
-        self.memory_buffer.store(state=state.copy().reshape(-1), action_space=action_space.copy())
+
+        self.memory_buffer.store(state=state.copy().reshape(-1), action_space=action_space.copy(), action=action.copy())
 
         return
 
@@ -91,7 +91,7 @@ class AI:
             data = self.replay_buffer.sample(size=BATCH_SIZE)
             loss = tf.reduce_mean(self.behavior.train(*data))
         else:
-            loss = None
+            loss = 0
             print('Didn\'t update because no samples available.')
 
         self.episode += 1

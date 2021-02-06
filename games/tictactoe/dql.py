@@ -10,7 +10,7 @@ from agents.policies import egreedy_ragged, greedy_ragged
 
 class DQL:
 
-    def __init__(self, action_space, discount_factor=0.9, q_lr=0.001, target_lr=0.01):
+    def __init__(self, action_space, discount_factor=0.9, q_lr=0.01, target_lr=0.1):
 
         self.q = QNetwork()
         self.q_target = QNetwork()
@@ -25,7 +25,6 @@ class DQL:
 
         self.train_policy = egreedy_ragged
         self.play_policy = greedy_ragged
-
 
     @tf.function
     def predict(self, state, action_mask=None, explore=True, target=False):
@@ -88,7 +87,6 @@ class DQL:
         if tf.shape(target_q_value_d)[0] == 0:
             target_q_values = target_q_value_nd
         elif tf.shape(target_q_value_nd)[0] == 0:
-
             target_q_values = target_q_value_d
         else:
             # combine them again
@@ -111,7 +109,7 @@ class DQL:
         grads = [(b - a) for a, b in zip(self.q.trainable_variables, self.q_target.trainable_variables)]
         self.q_target_optimizer.apply_gradients(zip(grads, self.q_target.trainable_variables))
 
-        return tf.reduce_mean(q_loss)
+        return q_loss
 
     def save_model(self, agent_id):
 

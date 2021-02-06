@@ -47,10 +47,15 @@ class Simulator:
                 active_player = self.players[self.active_player]
 
                 state, previous_rewards, legal_actions, done = self.env.observe(active_player.id)
-                active_player.observe(state, previous_rewards, legal_actions, done)
                 action = active_player.play(state, legal_actions, greedy)
 
+                active_player.observe(state, previous_rewards, legal_actions, done, action)
+
+
                 done, self.active_player, info = self.env.step(self.active_player, action)
+
+                #if update:
+                #    self.loss_hist[active_player.id].append(active_player.update())
 
                 steps += 1
                 if max_steps is not None and steps >= max_steps:
@@ -61,20 +66,20 @@ class Simulator:
 
             # observe final reward
             games_per_episode.append(steps)
-            [player.observe(*self.env.observe(player.id)) for player in self.players.values()]
+            [player.observe(*self.env.observe(player.id), action) for player in self.players.values()]
             [self.reward_hist[key].append(value) for key, value in self.env.rewards.items()]
             # print(self.env.rewards)
 
             if update:
                 [self.loss_hist[player.id].append(player.update()) for player in self.players.values()]
 
-            if episode % 100 == 0:
+            if episode % 1000 == 0 and episode != 0:
                 for key, value in self.loss_hist.items():
-                    print(f'{key} Average loss for last 100 updates: {sum(value[-100:]) / len(value[-100:])}')
+                    print(f'{key} Average loss for last 1000 updates: {sum(value[-1000:]) / len(value[-1000:])}')
                 for key, value in self.reward_hist.items():
-                    print(f'{key} Average reward for last 100 updates: {sum(value[-100:]) / len(value[-100:])}')
+                    print(f'{key} Average reward for last 1000 updates: {sum(value[-1000:]) / len(value[-1000:])}')
                 for key, value in self.reward_hist.items():
-                    print(f'{key} Average number of ties for last 100 updates: {value[-100:].count(0) / len(value[-100:])}')
+                    print(f'{key} Average number of ties for last 1000 updates: {value[-1000:].count(0) / len(value[-1000:])}')
 
             if episode % 1000 == 0:
                 print('Visualizing board:')
@@ -167,7 +172,7 @@ simulator = Simulator([player_1, player_2], TicTacToeEnv)
 
 
 #exit()
-simulator.play(episodes=25000, greedy=False)
+simulator.play(episodes=50000, greedy=False)
 simulator.plot_performance()
 
 print(f'Runtime was {time.time() - start_time} seconds.')
