@@ -24,7 +24,7 @@ class AI:
 
         self._turn_rewards = None
 
-    def play(self, state, mask, explore=True):
+    def play(self, state, mask, explore=True, target=False):
         """
 
         :param state:
@@ -38,7 +38,7 @@ class AI:
         state = tf.convert_to_tensor(state)
         mask = tf.convert_to_tensor(mask)
 
-        optimal_action = self.behavior.predict(state, mask, explore, target=False)
+        optimal_action = self.behavior.predict(state, mask, explore, target=target)
 
         optimal_action = optimal_action.numpy().reshape(-1)
 
@@ -86,6 +86,8 @@ class AI:
         return
 
     def update(self):
+
+        #print(f'Updating player: {self.id}')
 
         if self.replay_buffer.current_size != 0:
             data = self.replay_buffer.sample(size=BATCH_SIZE)

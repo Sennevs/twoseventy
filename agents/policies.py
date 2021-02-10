@@ -81,10 +81,27 @@ def greedy_ragged(inputs):
 
 
 def egreedy_ragged(inputs):
+
+    epsilon = 0.1
+    greedy = tf.random.uniform([1], dtype=tf.float32) > epsilon
     q_values, actions = inputs
-    idx = tf.argmax(q_values)
+
+    if greedy:
+        idx = tf.argmax(q_values)
+        idx = tf.cast(idx, tf.int32)
+    else:
+        idx = tf.random.uniform([1], minval=0, maxval=tf.shape(q_values)[1], dtype=tf.int32)
+
     opt_action = tf.reshape(tf.gather(actions, idx), (-1,))
 
     return opt_action
 
 
+def uniform_ragged(inputs):
+
+    q_values, actions = inputs
+
+    idx = tf.random.uniform([1], minval=0, maxval=tf.shape(q_values)[0], dtype=tf.int32)
+    opt_action = tf.reshape(tf.gather(actions, idx), (-1,))
+
+    return opt_action

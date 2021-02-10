@@ -1,4 +1,5 @@
 import tensorflow as tf
+import aim
 physical_devices = tf.config.list_physical_devices('GPU')
 
 tf.config.experimental.set_memory_growth(physical_devices[0], True)
@@ -12,20 +13,32 @@ from games.tictactoe.dql import DQL
 
 class Simulator:
 
-    def __init__(self, players, env):
+    def __init__(self, players, env, test_players=None, metrics=None):
 
         # check if 2 players are playing, only supported mode for now
         if len(players) != 2:
             raise ValueError('Tictactoe simulator is currently only supported for 2 player games.')
 
         self.players = {player.id: player for player in players}
+        self.test_players = {player.id: player for player in test_players}
         self.env = env(self.players.keys())
         self.active_player = None
 
         self.loss_hist = {player.id: [] for player in players}
         self.reward_hist = {player.id: [] for player in players}
 
-    def play(self, episodes, greedy=False, max_steps=None, update=True, save_model=True):
+        self.metrics = metrics or []
+
+
+    def play(self, episodes, greedy=False, max_steps=None, update=True, save_model=True, q_lr_player_1=0.001):
+
+        #self.players['player_1'].behavior.q_lr = q_lr_player_1
+
+
+
+        #hyperparam_dict = {'player': 'player_1',
+        #                   'q_lr': q_lr_player_1}
+        #aim.set_params(hyperparam_dict, name='player_1_hyperparams')
 
         games_per_episode = []
 
@@ -39,6 +52,8 @@ class Simulator:
 
             done = False
 
+            actions = {player: None for player in self.players}
+
             #import time
             #start_time = time.time()
 
@@ -47,12 +62,15 @@ class Simulator:
                 active_player = self.players[self.active_player]
 
                 state, previous_rewards, legal_actions, done = self.env.observe(active_player.id)
-                action = active_player.play(state, legal_actions, greedy)
+                actions[active_player.id] = active_player.play(state, legal_actions, explore=True)
 
-                active_player.observe(state, previous_rewards, legal_actions, done, action)
+                #print(f'Player {active_player.id} action:')
+                #print(action)
+
+                active_player.observe(state, previous_rewards, legal_actions, done, actions[active_player.id])
 
 
-                done, self.active_player, info = self.env.step(self.active_player, action)
+                done, self.active_player, info = self.env.step(self.active_player, actions[active_player.id])
 
                 #if update:
                 #    self.loss_hist[active_player.id].append(active_player.update())
@@ -66,12 +84,13 @@ class Simulator:
 
             # observe final reward
             games_per_episode.append(steps)
-            [player.observe(*self.env.observe(player.id), action) for player in self.players.values()]
+            [player.observe(*self.env.observe(player.id), actions[player.id]) for player in self.players.values()]
             [self.reward_hist[key].append(value) for key, value in self.env.rewards.items()]
             # print(self.env.rewards)
 
             if update:
                 [self.loss_hist[player.id].append(player.update()) for player in self.players.values()]
+                #aim.track(float(self.loss_hist['player_1'][-1].numpy()), name='loss', epoch=episode)
 
             if episode % 1000 == 0 and episode != 0:
                 for key, value in self.loss_hist.items():
@@ -81,10 +100,11 @@ class Simulator:
                 for key, value in self.reward_hist.items():
                     print(f'{key} Average number of ties for last 1000 updates: {value[-1000:].count(0) / len(value[-1000:])}')
 
-            if episode % 1000 == 0:
+            if episode % 1000 == 0 and episode != 0:
                 print('Visualizing board:')
                 print(self.env.visualize_board())
 
+                self.test()
 
             # print(f'Updating player took {time.time() - start_time} seconds')
 
@@ -93,6 +113,53 @@ class Simulator:
         if save_model:
             [player.save_model() for player in self.players.values()]
         return
+
+    def test(self):
+
+        score = float(0)
+        losses = 0
+        test_env = TicTacToeEnv(self.test_players.keys())
+        for episode in range(1000):
+
+            [player.reset() for player in self.test_players.values()]
+            self.active_player = test_env.reset()
+
+            done = False
+            action_hist = []
+
+            #print(f'Game {episode}')
+
+            steps = 0
+            while not done:
+                active_player = self.test_players[self.active_player]
+
+                state, previous_rewards, legal_actions, done = test_env.observe(active_player.id)
+                action = active_player.play(state, legal_actions, explore=False, target=False)
+                action_hist.append(action)
+                #print(f'Player {active_player.id}')
+                #print(action)
+                #print(action)
+                done, self.active_player, info = test_env.step(self.active_player, action)
+
+                steps += 1
+
+            # observe final reward
+            score += test_env.rewards['player_1']
+            losses += 1 if test_env.rewards['player_1'] == -1 else 0
+
+            if test_env.rewards['player_1'] == -1:
+                print(f'Episode: {episode}')
+                for a in action_hist:
+                    print(a)
+
+
+            #print(test_env.rewards['player_1'])
+
+        print(f'Score for player 1: {score}')
+        print(f'Losses for player 1: {losses}')
+
+
+        return score
 
     def plot_performance(self):
 
@@ -160,9 +227,11 @@ import time
 start_time = time.time()
 behavior_1 = DQL(action_space=9)
 behavior_2 = DQL(action_space=9)
+behavior_3 = DQL(action_space=9, random=True)
 player_1 = AI('player_1', behavior=behavior_1)
 player_2 = AI('player_2', behavior=behavior_2)
-simulator = Simulator([player_1, player_2], TicTacToeEnv)
+player_random = AI('player_3', behavior=behavior_3)
+simulator = Simulator([player_1, player_2], TicTacToeEnv, [player_1, player_random])
 
 #player_1.load_model()
 #player_2.load_model()
@@ -172,13 +241,31 @@ simulator = Simulator([player_1, player_2], TicTacToeEnv)
 
 
 #exit()
+
 simulator.play(episodes=50000, greedy=False)
 simulator.plot_performance()
+#sess.close()
 
 print(f'Runtime was {time.time() - start_time} seconds.')
 
-simulator.play(episodes=1, greedy=True)
+simulator2 = Simulator([player_1, player_random], TicTacToeEnv)
+simulator2.play(episodes=100, greedy=True)
 print(simulator.env.visualize_board())
+
+exit()
+
+experiments = [0.1, 0.01, 0.001]
+
+for experiment in experiments:
+    sess = aim.Session(run=f'{int(1000000*experiment)}_b')
+    simulator.play(episodes=10, greedy=False, q_lr_player_1=experiment)
+    simulator.plot_performance()
+    sess.close()
+
+    print(f'Runtime was {time.time() - start_time} seconds.')
+
+    simulator.play(episodes=1, greedy=True)
+    print(simulator.env.visualize_board())
 
 exit()
 

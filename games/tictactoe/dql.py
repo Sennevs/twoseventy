@@ -5,12 +5,12 @@ os.environ["CUDA_VISIBLE_DEVICES"]="0"
 import tensorflow as tf
 
 from agents.q_network import QNetwork
-from agents.policies import egreedy_ragged, greedy_ragged
+from agents.policies import egreedy_ragged, greedy_ragged, uniform_ragged
 
 
 class DQL:
 
-    def __init__(self, action_space, discount_factor=0.9, q_lr=0.01, target_lr=0.1):
+    def __init__(self, action_space, discount_factor=0.9, q_lr=0.001, target_lr=0.0001, random=False):
 
         self.q = QNetwork()
         self.q_target = QNetwork()
@@ -25,6 +25,8 @@ class DQL:
 
         self.train_policy = egreedy_ragged
         self.play_policy = greedy_ragged
+
+        self.random = random
 
     @tf.function
     def predict(self, state, action_mask=None, explore=True, target=False):
@@ -52,21 +54,44 @@ class DQL:
         q_values2 = self.q([legal_states, legal_actions_tensor])
         q_values = q_values1 if target else q_values2
 
-
         # transform q-values to ragged tensor based on idx
         q_values = tf.RaggedTensor.from_nested_row_lengths(q_values, legal_actions.nested_row_lengths())
 
-        if explore:
+        #print('q_values:')
+        #print(q_values)
+
+        if self.random:
+
+            optimal_action = tf.map_fn(uniform_ragged, elems=[q_values, legal_actions],
+                                       fn_output_signature=tf.TensorSpec(shape=[self.action_space, ], dtype=tf.float32))
+
+        elif explore:
             optimal_action = tf.map_fn(egreedy_ragged, elems=[q_values, legal_actions],
                                        fn_output_signature=tf.TensorSpec(shape=[self.action_space, ], dtype=tf.float32))
         else:
             optimal_action = tf.map_fn(greedy_ragged, elems=[q_values, legal_actions],
                                        fn_output_signature=tf.TensorSpec(shape=[self.action_space, ], dtype=tf.float32))
 
+
         return optimal_action
 
     @tf.function
     def train(self, states, actions, rewards, next_states, action_masks, next_action_masks, dones):
+
+        #print('States:')
+        #print(states)
+        #print('Actions:')
+        #print(actions)
+        #print('Rewards:')
+        #print(rewards)
+        #print('Next states:')
+        #print(next_states)
+        #print('Next action masks:')
+        #print(next_action_masks)
+        #print('Dones:')
+        #print(dones)
+        #from time import sleep
+        #sleep(10)
 
         rewards = tf.cast(rewards, tf.float32)
 
@@ -78,7 +103,7 @@ class DQL:
         next_action_masks_nd = tf.boolean_mask(next_action_masks, not_dones_mask, axis=0)
         target_q_value_d = rewards_d
 
-        next_actions_nd = self.predict(next_states_nd, next_action_masks_nd, target=True)
+        next_actions_nd = self.predict(next_states_nd, next_action_masks_nd, target=True, explore=False)
 
         rewards_nd = tf.reshape(tf.cast(rewards_nd, tf.float32), (-1, 1))
 

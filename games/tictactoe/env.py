@@ -16,7 +16,7 @@ class Player:
 
 class TicTacToeEnv(Env):
 
-    def __init__(self, players, board_size=3, start_order='random'):
+    def __init__(self, players, board_size=3, start_order='test'):
 
         # temp checks because not everything is supported yet
         if len(players) != 2:
@@ -84,6 +84,8 @@ class TicTacToeEnv(Env):
         if self.start_order == 'random':
             self._turn_sequence = deque(self.players.keys())
             shuffle(self._turn_sequence)
+        elif self.start_order == 'test':
+            self._turn_sequence = deque(self.players.keys())
         else:
             self._turn_sequence = deque(self.start_order)
 
@@ -93,7 +95,7 @@ class TicTacToeEnv(Env):
 
     def step(self, player, action):
 
-        import time
+        #import time
 
         # check if this player is allowed to make a move right now
         #start_time = time.time()
@@ -186,6 +188,7 @@ class TicTacToeEnv(Env):
     def confirm_move(self, action):
 
         self.board[:, self._turn_starts.index(self.active_player)] += action
+        #self.board[:, list(self.players.keys()).index(self.active_player)] += action
 
         return
 
